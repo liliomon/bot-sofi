@@ -1,141 +1,144 @@
 const puppeteer = require('puppeteer');
 
-async function startVotingBot() {
-    console.log('🤖 Iniciando bot de votación para Sofia Pepper...');
+// --- Global state for tracking total votes and time ---
+const totalState = {
+    totalVotes: 0,
+    startTime: Date.now(),
+};
+
+// --- Helper function to format milliseconds into a readable string (M:SS) ---
+function formatElapsedTime(ms) {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
+}
+
+// --- Function to log overall summary progress ---
+function logOverallSummary(numInstances) {
+    setInterval(() => {
+        const elapsedMs = Date.now() - totalState.startTime;
+        const elapsedTimeInMinutes = elapsedMs / (1000 * 60);
+        const averageVotesPerMinute = elapsedTimeInMinutes > 0 ? totalState.totalVotes / elapsedTimeInMinutes : 0;
+
+        console.log(`\n📊 [Resumen General]`);
+        console.log(`   - Instancias Activas: ${numInstances}`);
+        console.log(`   - Votos Totales: ${totalState.totalVotes}`);
+        console.log(`   - Tiempo Transcurrido: ${formatElapsedTime(elapsedMs)}`);
+        console.log(`   - Promedio General: ${averageVotesPerMinute.toFixed(2)} votos/minuto\n`);
+
+    }, 60000); // Log a summary every 60 seconds
+}
+
+async function startVotingBot(instanceId) {
+    console.log(`🤖 [Instancia ${instanceId}] Iniciando bot de votación para Sofia Pepper...`);
     
     let browser;
     try {
         browser = await puppeteer.launch({
-            headless: false,
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
+            headless: true,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-gpu',
+                '--disable-dev-shm-usage'
+            ]
         });
         
         const page = await browser.newPage();
         await page.setViewport({ width: 1280, height: 720 });
         
-        const startTime = Date.now();
-        const targetVotes = 10000; // 10,000 votos objetivo
-        let voteCount = 0;
-        let attempts = 0;
-        
-        console.log('🎯 Objetivo: 10,000 votos lo más rápido posible...\n');
-        
-        while (voteCount < targetVotes) {
-            attempts++;
-            const elapsedTime = Math.ceil((Date.now() - startTime) / 1000);
-            const remainingVotes = targetVotes - voteCount;
-            
+        while (true) {
             try {
-                console.log(`🗳️  Intento #${attempts} | Votos: ${voteCount}/${targetVotes} | Tiempo: ${elapsedTime}s`);
-                
-                // Ir a la página del poll
                 await page.goto('https://poll.fm/15690408', { 
                     waitUntil: 'networkidle0',
                     timeout: 15000 
                 });
                 
-                // Esperar mínimo para que cargue (optimizado para velocidad)
                 await new Promise(resolve => setTimeout(resolve, 1000));
                 
-                // Buscar la opción de Sofia Pepper usando el label específico
                 const sofiaFound = await page.evaluate(() => {
-                    // Primero intentar con el label específico para Sofia Pepper
                     const sofiaLabel = document.querySelector('label[for="PDI_answer69193189"]');
                     if (sofiaLabel) {
                         sofiaLabel.click();
                         return true;
                     }
-                    
-                    // Método alternativo: buscar por texto
-                    const labels = document.querySelectorAll('label, div, span');
-                    for (let label of labels) {
-                        if (label.textContent && label.textContent.includes('Sofia Pepper')) {
-                            label.click();
-                            return true;
-                        }
-                    }
-                    
-                    // Buscar radio buttons como último recurso
-                    const radios = document.querySelectorAll('input[type="radio"]');
-                    for (let radio of radios) {
-                        const nextElement = radio.nextElementSibling;
-                        if (nextElement && nextElement.textContent && nextElement.textContent.includes('Sofia Pepper')) {
-                            radio.click();
-                            return true;
-                        }
-                    }
                     return false;
                 });
                 
                 if (sofiaFound) {
-                    console.log('✅ Opción de Sofia seleccionada');
-                    
-                    // Esperar mínimo antes de votar
                     await new Promise(resolve => setTimeout(resolve, 500));
                     
-                    // Buscar y hacer clic en el botón Vote usando el ID específico
                     const voteClicked = await page.evaluate(() => {
-                        // Primero intentar con el ID específico
                         const voteButton = document.getElementById('pd-vote-button15690408');
                         if (voteButton) {
                             voteButton.click();
                             return true;
                         }
-                        
-                        // Método alternativo si no encuentra el ID
-                        const buttons = document.querySelectorAll('button, input[type="submit"]');
-                        for (let button of buttons) {
-                            if (button.textContent && button.textContent.toLowerCase().includes('vote')) {
-                                button.click();
-                                return true;
-                            }
-                        }
                         return false;
                     });
                     
                     if (voteClicked) {
-                        voteCount++;
-                        console.log(`✨ Voto #${voteCount} enviado!`);
+                        totalState.totalVotes++;
+                        const elapsedMs = Date.now() - totalState.startTime;
+                        const elapsedTimeInMinutes = elapsedMs / (1000 * 60);
+                        const currentVPM = elapsedTimeInMinutes > 0 ? totalState.totalVotes / elapsedTimeInMinutes : 0;
+
+                        console.log(
+                            `✨ [Instancia ${instanceId}] Voto enviado! | Total: ${totalState.totalVotes} | Tiempo: ${formatElapsedTime(elapsedMs)} | Promedio: ${currentVPM.toFixed(2)} votos/min`
+                        );
                         
-                        // Esperar mínimo para confirmación
                         await new Promise(resolve => setTimeout(resolve, 1000));
                     } else {
-                        console.log('❌ No se encontró el botón Vote');
+                        console.log(`❌ [Instancia ${instanceId}] No se encontró el botón de votar.`);
                     }
                 } else {
-                    console.log('❌ No se encontró la opción de Sofia');
+                    console.log(`❌ [Instancia ${instanceId}] No se encontró la opción de Sofia.`);
                 }
                 
-                // Pausa mínima antes del siguiente intento (optimizado)
                 await new Promise(resolve => setTimeout(resolve, 500));
                 
             } catch (error) {
-                console.log('⚠️ Error:', error.message);
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                console.log(`⚠️ [Instancia ${instanceId}] Error: ${error.message}. Reintentando...`);
+                await new Promise(resolve => setTimeout(resolve, 2000));
             }
         }
         
-        const totalTime = Math.ceil((Date.now() - startTime) / 1000);
-        console.log('\n🎉 Votación completada!');
-        console.log(`📊 Votos realizados: ${voteCount}/${targetVotes}`);
-        console.log(`🔄 Intentos totales: ${attempts}`);
-        console.log(`⏱️ Tiempo total: ${totalTime} segundos`);
-        console.log(`⚡ Tasa de éxito: ${((voteCount/attempts)*100).toFixed(1)}%`);
-        console.log(`🚀 Velocidad: ${(voteCount/totalTime*60).toFixed(1)} votos/minuto`);
-        
     } catch (error) {
-        console.error('💥 Error fatal:', error.message);
+        console.error(`💥 [Instancia ${instanceId}] Error fatal:`, error.message);
     } finally {
         if (browser) {
             await browser.close();
+            console.log(`🚪 [Instancia ${instanceId}] Bot detenido y navegador cerrado.`);
         }
     }
 }
 
-// Ejecutar
-console.log('🚀 Bot de votación TURBO iniciando...');
-console.log('🎯 Votando por: Sofia Pepper, Amarillo High girls soccer');
-console.log('📍 Poll: https://poll.fm/15690408');
-console.log('🎯 Objetivo: 10,000 votos lo más rápido posible\n');
+// --- Main execution block for parallel instances ---
+async function runParallelBots() {
+    const numParallelInstances = parseInt(process.argv[2], 10);
 
-startVotingBot().catch(console.error);
+    if (isNaN(numParallelInstances) || numParallelInstances <= 0) {
+        console.error('Uso: node voting-bot.js <numero_de_instancias_paralelas>');
+        console.error('Por favor, proporciona un número entero positivo.');
+        process.exit(1);
+    }
+
+    console.log(`🚀 Iniciando ${numParallelInstances} bots de votación en paralelo...`);
+    console.log('🎯 Votando por: Sofia Pepper, Amarillo High girls soccer');
+    console.log('📍 Encuesta: https://poll.fm/15690408\n');
+    console.log('ℹ️  Presiona Ctrl+C para detener el script.\n');
+
+    logOverallSummary(numParallelInstances);
+
+    const botPromises = [];
+    for (let i = 1; i <= numParallelInstances; i++) {
+        botPromises.push(startVotingBot(i));
+    }
+
+    await Promise.all(botPromises);
+
+    console.log('\n✅ Todos los bots han sido detenidos.');
+}
+
+runParallelBots().catch(console.error);
