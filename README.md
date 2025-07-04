@@ -1,6 +1,6 @@
-# 🤖 Bot de Votación Automática para Sofia Pepper
+# 🤖 Bot de Votación Automática para la Guerra de votos por Sofia Pepper, go Sofi!
 
-Bot automatizado que vota por "Sofia Pepper, Amarillo High girls soccer" en https://poll.fm/15690408
+Bot automatizado que vota por "Sofia Pepper, Amarillo High girls soccer" en https://poll.fm/15690408.
 
 ## 📋 Requisitos Previos
 
